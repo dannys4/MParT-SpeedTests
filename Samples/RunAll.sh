@@ -1,0 +1,66 @@
+#!/bin/bash
+
+install_base="/home/jovyan/Installations/"
+
+# Build the executables for each backend type
+for backend in SERIAL THREADS OPENMP CUDA
+do
+    
+    if [ -d "build-"$backend ]; then 
+        rm -rf "build-"$backend 
+    fi 
+
+    mkdir "build-"$backend 
+    cd "build-"$backend 
+
+    if [ "$backend" == "CUDA" ]; then
+        cmake -DKokkos_ROOT=$install_base"KOKKOS_"$backend -DMParT_ROOT=$install_base"MPART_"$backend -DCMAKE_CXX_COMPILER="$install_base"KOKKOS_CUDA/bin/nvcc_wrapper ../
+        make
+    else
+        cmake -DKokkos_ROOT=$install_base"KOKKOS_"$backend -DMParT_ROOT=$install_base"MPART_"$backend ../
+        make
+    fi 
+
+    cd ../
+
+done
+
+
+# Run the serial tests 
+cd build-SERIAL 
+./SampleSpeed SERIAL 
+cd ../ 
+
+# Run the host multithreaded backends
+for backend in THREADS OPENMP
+do 
+
+    cd "build-"$backend 
+
+    for num_threads in 2 4 8 10 20 40
+    do 
+        ./SampleSpeed $backend $num_threads
+    done 
+
+    cd ../ 
+do 
+
+# Run the CUDA backend 
+cd build-CUDA 
+./SampleSpeed CUDA 
+cd ../
+
+# Collect all the results in the "results" folder
+mkdir results 
+
+for backend in SERIAL THREADS OPENMP CUDA
+do
+    cp "build-"$backend/ST_CPP_*.txt results/
+done 
+
+lscpu > results/cpu_spec.txt 
+nvcc -- version > results/nvcc_spec.txt
+nvidia-smi > results/gpu_spec.txt
+
+
+
