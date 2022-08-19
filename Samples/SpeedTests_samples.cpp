@@ -130,6 +130,9 @@ int main(int argc, char* argv[]){
     auto tEval = Eigen::MatrixXd(nn,nk);
     auto tLogDet = Eigen::MatrixXd(nn,nk);
 
+
+    std::cout << "\nRunning Backend " << backend << std::endl;
+
     for (unsigned int n=0; n<nn;++n){
         unsigned int dim = 5;
         unsigned int order = 2;
@@ -142,7 +145,6 @@ int main(int argc, char* argv[]){
         // auto tEval = Eigen::VectorXd(nk);
         // auto tLogDet = Eigen::VectorXd(nk);
 
-        std::cout << "Running Backend " << backend << std::endl;
         std::cout << "    NPts = " << numPts << ",  Trial: " << 0 << "/" << nk-1 << std::flush;
 
         for(unsigned int k=0; k<nk;++k){
@@ -173,7 +175,6 @@ int main(int argc, char* argv[]){
         // tLogDetMat_m(n)=tLogDet.mean();
         // tEvalMat_s(n)=std::sqrt((tEval - tEval.mean()).square().sum()/(tEval.size()-1));
         // tLogDetMat_s(n)=std::sqrt((tLogDet - tLogDet.mean()).square().sum()/(tLogDet.size()-1));
-        std::cout<< "\ndone." << std::endl;
     }
     
     {
@@ -200,7 +201,7 @@ int main(int argc, char* argv[]){
     
 
     }
-    std::cout<<"FINI !!!"<<std::endl;
+
     Kokkos::finalize();
 	
     return 0;

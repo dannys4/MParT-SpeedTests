@@ -46,7 +46,7 @@ do
     done 
 
     cd ../ 
-do 
+done 
 
 # Run the CUDA backend 
 cd build-CUDA 
@@ -62,8 +62,9 @@ do
 done 
 
 lscpu > results/cpu_spec.txt 
-nvcc -- version > results/nvcc_spec.txt
+nvcc --version > results/nvcc_spec.txt
 nvidia-smi > results/gpu_spec.txt
+
 
 
 
