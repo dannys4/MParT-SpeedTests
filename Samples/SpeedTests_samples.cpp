@@ -11,6 +11,7 @@ TODO: ADD DESCRIPTION
 #include <Eigen/Dense>
 
 #include <Kokkos_Core.hpp>
+#include <Kokkos_Random.hpp>
 
 #include <MParT/ConditionalMapBase.h>
 #include <MParT/MapFactory.h>
@@ -27,11 +28,12 @@ using namespace mpart;
 template<typename MemorySpace>
 struct Generator{
 
-    const unsigned int seed = 1000;
+    const unsigned int seed = 2012;
 
-    Generator(){
-        std::srand(seed);
-    }
+    std::mt19937 mt;
+    std::uniform_real_distribution<double> dist;
+
+    Generator() : mt(2012), dist(-1,1){};
 
     Kokkos::View<double*,MemorySpace> Coeffs(unsigned int numCoeffs);
     Kokkos::View<double**, MemorySpace> Points(unsigned int dim, unsigned int numPts);
@@ -40,32 +42,61 @@ struct Generator{
 template<>
 Kokkos::View<double*,Kokkos::HostSpace> Generator<Kokkos::HostSpace>::Coeffs(unsigned int numCoeffs)
 {
-    Eigen::VectorXd coeffs_eig = 0.5*Eigen::VectorXd::Random(numCoeffs);
-    return VecToKokkos<double>(coeffs_eig);
+    Kokkos::View<double*,Kokkos::HostSpace> output("Coefficients", numCoeffs);
+    for(unsigned int i=0; i<numCoeffs; ++i)
+        output(i) = dist(mt);
+
+    return output;
 }
 
 template<>
 Kokkos::View<double**,Kokkos::HostSpace> Generator<Kokkos::HostSpace>::Points(unsigned int dim, unsigned int numPts)
 {
-    Eigen::RowMatrixXd pts_eig = 0.8*Eigen::RowMatrixXd::Random(dim,numPts);
-    return MatToKokkos<double>(pts_eig);
+    Kokkos::View<double**,Kokkos::HostSpace> output("Points", dim, numPts);
+    for(unsigned int i=0; i<dim; ++i){
+        for(unsigned int j=0; j<numPts; ++j)
+            output(i,j) = dist(mt);
+    }
+
+    return output;
 }
 
 #if defined(KOKKOS_ENABLE_CUDA )
 template<typename MemorySpace>
 Kokkos::View<double*,MemorySpace> Generator<MemorySpace>::Coeffs(unsigned int numCoeffs)
-{
-    Eigen::VectorXd coeffs_eig = 0.5*Eigen::VectorXd::Random(numCoeffs);
-    auto coeffs = VecToKokkos<double>(coeffs_eig);
-    return ToDevice<MemorySpace,double>(coeffs);
+{   
+    Kokkos::Random_XorShift64_Pool<> rand_pool(5374857);
+
+    Kokkos::View<double*, MemorySpace> coeffs("Coefficients", numCoeffs);
+    Kokkos::parallel_for(1, KOKKOS_LAMBDA(int const& i){
+        
+        auto rand_gen = rand_pool.get_state();
+        for (int k = 0; k < numCoeffs; k++) 
+            coeffs(k) = rand_gen.frand(-1,1);
+        rand_pool.free_state(rand_gen);
+    });
+
+    Kokkos::fence();
+
+    return coeffs;
 }
 
 template<typename MemorySpace>
 Kokkos::View<double**,MemorySpace> Generator<MemorySpace>::Points(unsigned int dim, unsigned int numPts)
-{
-    Eigen::MatrixXd pts_eig = 0.8*Eigen::MatrixXd::Random(dim,numPts);
-    auto pts = MatToKokkos<double>(pts_eig);
-    return ToDevice<MemorySpace,double>(pts);
+{   
+    Kokkos::Random_XorShift64_Pool<> rand_pool(5374857);
+
+    Kokkos::View<double**, MemorySpace> pts("Points", dim, numPts);
+    Kokkos::parallel_for(dim, KOKKOS_LAMBDA(int const& i){
+        auto rand_gen = rand_pool.get_state();
+        for (int k = 0; k < numPts; k++) 
+            pts(i,k) = rand_gen.frand(-1,1);
+        rand_pool.free_state(rand_gen);
+    });
+
+    Kokkos::fence();
+
+    return pts;
 }
 
 #endif 
@@ -78,7 +109,9 @@ int main(int argc, char* argv[]){
     Kokkos::InitArguments args;
     if(argc==3)
         args.num_threads = std::stoi(argv[2]);
-    
+    else
+        args.num_threads = 1;
+
     Kokkos::initialize(args);
     {
     MapOptions opts;
@@ -96,7 +129,7 @@ int main(int argc, char* argv[]){
 
     auto tEval = Eigen::MatrixXd(nn,nk);
     auto tLogDet = Eigen::MatrixXd(nn,nk);
-    
+
     for (unsigned int n=0; n<nn;++n){
         unsigned int dim = 5;
         unsigned int order = 2;
@@ -109,8 +142,16 @@ int main(int argc, char* argv[]){
         // auto tEval = Eigen::VectorXd(nk);
         // auto tLogDet = Eigen::VectorXd(nk);
 
+        std::cout << "Running Backend " << backend << std::endl;
+        std::cout << "    NPts = " << numPts << ",  Trial: " << 0 << "/" << nk-1 << std::flush;
+
         for(unsigned int k=0; k<nk;++k){
-            
+
+            // Print the current trial.  use \b to overwrite the previous number
+            for(int iii=0; iii< 3 + std::floor(log10(nk))+ std::floor(std::log10(std::max<int>(k,1))); ++iii)
+                std::cout << "\b";
+            std::cout << k << "/" << nk-1 << std::flush;
+
             Kokkos::View<double*> coeffs = gen.Coeffs(numCoeffs);            
             map->SetCoeffs(coeffs); 
 
@@ -132,12 +173,12 @@ int main(int argc, char* argv[]){
         // tLogDetMat_m(n)=tLogDet.mean();
         // tEvalMat_s(n)=std::sqrt((tEval - tEval.mean()).square().sum()/(tEval.size()-1));
         // tLogDetMat_s(n)=std::sqrt((tLogDet - tLogDet.mean()).square().sum()/(tLogDet.size()-1));
-        std::cout<<n<<std::endl;
+        std::cout<< "\ndone." << std::endl;
     }
     
     {
         std::stringstream filename;
-        filename << "ST_CPP_eval_d5_to2_" << backend << ".txt";
+        filename << "ST_CPP_eval_d5_to2_nt" << args.num_threads << "_" << backend << ".txt";
 
         std::ofstream file1(filename.str());  
         if(file1.is_open())  // si l'ouverture a réussi
@@ -148,7 +189,7 @@ int main(int argc, char* argv[]){
 
     {
         std::stringstream filename;
-        filename << "ST_CPP_logdet_d5_to2_" << backend << ".txt";
+        filename << "ST_CPP_logdet_d5_to2_nt" << args.num_threads << "_" << backend << ".txt";
 
         std::ofstream file2(filename.str());  
         if(file2.is_open())  // si l'ouverture a réussi

@@ -31,13 +31,16 @@ cd build-SERIAL
 ./SampleSpeed SERIAL 
 cd ../ 
 
+export OMP_PROC_BIND=spread
+export OMP_PLACES=threads
+
 # Run the host multithreaded backends
 for backend in THREADS OPENMP
 do 
 
     cd "build-"$backend 
 
-    for num_threads in 2 4 8 10 20 40
+    for num_threads in 2 4 8 16 32
     do 
         ./SampleSpeed $backend $num_threads
     done 
