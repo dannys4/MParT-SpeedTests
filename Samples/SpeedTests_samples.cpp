@@ -36,7 +36,7 @@ struct Generator{
     Generator() : mt(2012), dist(-1,1){};
 
     Kokkos::View<double*,MemorySpace> Coeffs(unsigned int numCoeffs);
-    Kokkos::View<double**, MemorySpace> Points(unsigned int dim, unsigned int numPts);
+    Kokkos::View<double**, Kokkos::LayoutLeft, MemorySpace> Points(unsigned int dim, unsigned int numPts);
 };
 
 template<>
@@ -50,9 +50,9 @@ Kokkos::View<double*,Kokkos::HostSpace> Generator<Kokkos::HostSpace>::Coeffs(uns
 }
 
 template<>
-Kokkos::View<double**,Kokkos::HostSpace> Generator<Kokkos::HostSpace>::Points(unsigned int dim, unsigned int numPts)
+Kokkos::View<double**,Kokkos::LayoutLeft, Kokkos::HostSpace> Generator<Kokkos::HostSpace>::Points(unsigned int dim, unsigned int numPts)
 {
-    Kokkos::View<double**,Kokkos::HostSpace> output("Points", dim, numPts);
+    Kokkos::View<double**,Kokkos::LayoutLeft, Kokkos::HostSpace> output("Points", dim, numPts);
     for(unsigned int i=0; i<dim; ++i){
         for(unsigned int j=0; j<numPts; ++j)
             output(i,j) = dist(mt);
@@ -82,11 +82,11 @@ Kokkos::View<double*,MemorySpace> Generator<MemorySpace>::Coeffs(unsigned int nu
 }
 
 template<typename MemorySpace>
-Kokkos::View<double**,MemorySpace> Generator<MemorySpace>::Points(unsigned int dim, unsigned int numPts)
+Kokkos::View<double**,Kokkos::LayoutLeft, MemorySpace> Generator<MemorySpace>::Points(unsigned int dim, unsigned int numPts)
 {   
     Kokkos::Random_XorShift64_Pool<> rand_pool(5374857);
 
-    Kokkos::View<double**, MemorySpace> pts("Points", dim, numPts);
+    Kokkos::View<double**, Kokkos::LayoutLeft, MemorySpace> pts("Points", dim, numPts);
     Kokkos::parallel_for(dim, KOKKOS_LAMBDA(int const& i){
         auto rand_gen = rand_pool.get_state();
         for (int k = 0; k < numPts; k++) 
@@ -112,10 +112,20 @@ int main(int argc, char* argv[]){
     else
         args.num_threads = 1;
 
+    const unsigned int dim = 5;
+    const unsigned int order = 5;
+    
     Kokkos::initialize(args);
     {
     MapOptions opts;
+    //opts.quadType = QuadTypes::AdaptiveSimpson;
+    //std::string quad_string = "simpson";
 
+    // Or
+    opts.quadType = QuadTypes::ClenshawCurtis;
+    opts.quadPts = 5;
+    std::string quad_string = "cc" + std::to_string(opts.quadPts);
+    
     unsigned int nn = 7;
 
     Generator<Kokkos::DefaultExecutionSpace::memory_space> gen;
@@ -125,7 +135,7 @@ int main(int argc, char* argv[]){
     auto tEvalMat_s = Eigen::VectorXd(nn);
     auto tLogDetMat_s = Eigen::VectorXd(nn);
 
-    unsigned int nk = 50;
+    unsigned int nk = 50; // number of repeated trials
 
     auto tEval = Eigen::MatrixXd(nn,nk);
     auto tLogDet = Eigen::MatrixXd(nn,nk);
@@ -134,8 +144,6 @@ int main(int argc, char* argv[]){
     std::cout << "\nRunning Backend " << backend << std::endl;
 
     for (unsigned int n=0; n<nn;++n){
-        unsigned int dim = 5;
-        unsigned int order = 2;
         
         auto map = MapFactory::CreateTriangular<Kokkos::DefaultExecutionSpace::memory_space>(dim,dim,order,opts);
         
@@ -145,7 +153,7 @@ int main(int argc, char* argv[]){
         // auto tEval = Eigen::VectorXd(nk);
         // auto tLogDet = Eigen::VectorXd(nk);
 
-        std::cout << "    NPts = " << numPts << ",  Trial: " << 0 << "/" << nk-1 << std::flush;
+        std::cout << "\n    NPts = " << numPts << ",  Trial: " << 0 << "/" << nk-1 << std::flush;
 
         for(unsigned int k=0; k<nk;++k){
 
@@ -157,7 +165,7 @@ int main(int argc, char* argv[]){
             Kokkos::View<double*> coeffs = gen.Coeffs(numCoeffs);            
             map->SetCoeffs(coeffs); 
 
-            Kokkos::View<double**> pts = gen.Points(dim,numPts);
+            Kokkos::View<double**,Kokkos::LayoutLeft> pts = gen.Points(dim,numPts);
           
             auto start1 = high_resolution_clock::now();
             auto evals = map->Evaluate(pts);
@@ -179,7 +187,7 @@ int main(int argc, char* argv[]){
     
     {
         std::stringstream filename;
-        filename << "ST_CPP_eval_d5_to2_nt" << args.num_threads << "_" << backend << ".txt";
+        filename << "ST_CPP_eval_d5_to" << order << "_nt" << args.num_threads << "_" << backend << "_" << quad_string << ".txt";
 
         std::ofstream file1(filename.str());  
         if(file1.is_open())  // si l'ouverture a réussi
@@ -190,7 +198,7 @@ int main(int argc, char* argv[]){
 
     {
         std::stringstream filename;
-        filename << "ST_CPP_logdet_d5_to2_nt" << args.num_threads << "_" << backend << ".txt";
+        filename << "ST_CPP_logdet_d5_to" << order << "_nt" << args.num_threads << "_" << backend << "_" << quad_string << ".txt";
 
         std::ofstream file2(filename.str());  
         if(file2.is_open())  // si l'ouverture a réussi
