@@ -1,9 +1,9 @@
 #!/bin/bash
 
-install_base="/home/jovyan/Installations/"
+install_base="/home/dannys4/installs/"
 
 # Build the executables for each backend type
-for backend in SERIAL THREADS OPENMP CUDA
+for backend in SERIAL THREADS OPENMP
 do
     
     if [ -d "build-"$backend ]; then 
@@ -49,21 +49,20 @@ do
 done 
 
 # Run the CUDA backend 
-cd build-CUDA 
-./SampleSpeed CUDA 
-cd ../
+# cd build-CUDA 
+# ./SampleSpeed CUDA 
+# cd ../
 
 # Collect all the results in the "results" folder
-mkdir results 
+now=$(date +'%m%d%Y_%H%M')
+mkdir results$now
 
-for backend in SERIAL THREADS OPENMP CUDA
+for backend in SERIAL THREADS OPENMP
 do
-    cp "build-"$backend/ST_CPP_*.txt results/
+    cp "build-"$backend/ST_CPP_*.txt results$now/
 done 
 
-lscpu > results/cpu_spec.txt 
-nvcc --version > results/nvcc_spec.txt
-nvidia-smi > results/gpu_spec.txt
+lscpu > results$now/cpu_spec.txt 
 
 
 
