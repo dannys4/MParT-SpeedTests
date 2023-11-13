@@ -4,32 +4,29 @@ import numpy as np
 
 res_folder = 'results'
 
-filename_base = 'results/ST_CPP_eval_d5_to5_'
-quad_string = 'simpson'
-#quad_string = 'cc5'
+filename_base = '../results11132023_0917/ST_CPP_eval_d5_to5_'
+# quad_string = 'simpson'
+quad_string = 'cc5'
 backends = {
-    'CUDA' : 'nt1_CUDA_{}.txt'.format(quad_string),
     'Serial' : 'nt1_SERIAL_{}.txt'.format(quad_string),
-    'Threads (16)' : 'nt16_THREADS_{}.txt'.format(quad_string),
-    'OpenMP (16)' : 'nt16_OPENMP_{}.txt'.format(quad_string),
+    'Threads (32)' : 'nt32_THREADS_{}.txt'.format(quad_string),
+    'OpenMP (32)' : 'nt32_OPENMP_{}.txt'.format(quad_string),
     'Threads (8)' : 'nt8_THREADS_{}.txt'.format(quad_string),
     'OpenMP (8)' : 'nt8_OPENMP_{}.txt'.format(quad_string)
 }
 
 colors = {
-    'CUDA':'#e41a1c',
     'Serial':'#377eb8', 
     'Threads (8)':'#4daf4a', 
-    'Threads (16)':'#4daf4a', 
-    'OpenMP (16)':'#984ea3', 
+    'Threads (32)':'#4daf4a', 
+    'OpenMP (32)':'#984ea3', 
     'OpenMP (8)':'#984ea3'
 }
 lines = {
-    'CUDA':'.-',
     'Serial':'.-', 
     'Threads (8)':'.--', 
-    'Threads (16)':'.-', 
-    'OpenMP (16)':'.-', 
+    'Threads (32)':'.-', 
+    'OpenMP (32)':'.-', 
     'OpenMP (8)':'.--'
 }
 
